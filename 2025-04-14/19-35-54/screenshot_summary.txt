@@ -1,0 +1,3 @@
+[2025-04-14 19:36:03.258344] Screenshot → screenshot_193603.png | Window: [chrome.exe – TryHackMe | Hacktivities - Google Chrome]
+[2025-04-14 19:36:47.536064] Screenshot → screenshot_193647.png | Window: [Spotify.exe – Spotify Premium]
+[2025-04-14 19:37:15.204765] Screenshot → screenshot_193715.png | Window: [Notepad.exe – screenshot_summary.txt – Bloc-notes]

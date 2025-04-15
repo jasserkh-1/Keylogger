@@ -1,0 +1,2 @@
+[2025-04-14 20:23:26.066466] Screenshot → screenshot_202326.png | Window: [chrome.exe – keylogger - Screenshot Detection Fix - Google Chrome]
+[2025-04-14 20:24:25.687927] Screenshot → screenshot_202425.png | Window: [Code.exe – keylogger.py - keylogger - Visual Studio Code]

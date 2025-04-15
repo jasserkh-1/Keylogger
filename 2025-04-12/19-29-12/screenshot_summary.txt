@@ -1,0 +1,1 @@
+[2025-04-12 19:29:26.177585] Screenshot → screenshot_192926.png | Window: [Code.exe – keylogger.py - keylogger - Visual Studio Code]

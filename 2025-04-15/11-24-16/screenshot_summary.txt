@@ -1,0 +1,3 @@
+[2025-04-15 11:24:21.540669] Screenshot → screenshot_112421.png | Window: [chrome.exe – Nouvel onglet - Google Chrome]
+[2025-04-15 11:24:46.667897] Screenshot → screenshot_112446.png | Window: [Spotify.exe – Spotify Premium]
+[2025-04-15 11:24:50.798624] Screenshot → screenshot_112450.png | Window: [Code.exe – keylogger.py - keylogger - Visual Studio Code]
