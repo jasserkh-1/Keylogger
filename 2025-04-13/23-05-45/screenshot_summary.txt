@@ -1,1 +1,0 @@
-[2025-04-13 23:07:05.030713] Screenshot → screenshot_230705.png | Window: [Code.exe – system_log.txt - keylogger - Visual Studio Code]

@@ -1,2 +1,0 @@
-[2025-04-14 20:20:07.472371] Screenshot → screenshot_202007.png | Window: [chrome.exe – Courrier - Jasser KHLIFI - Outlook - Google Chrome]
-[2025-04-14 20:20:35.001404] Screenshot → screenshot_202035.png | Window: [Code.exe – keylogger.py - keylogger - Visual Studio Code]
